@@ -1,0 +1,2 @@
+- name: Example Role Task Main
+  notify: Example Role Handler Main

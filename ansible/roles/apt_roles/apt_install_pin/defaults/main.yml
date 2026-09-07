@@ -1,0 +1,13 @@
+---
+# defaults file for pin_and_hold_packages
+
+# List of packages to pin to a common version and hold.
+# Example:
+#   packages:
+#     - kubeadm
+#     - kubelet
+#     - kubectl
+packages: []
+
+# Whether to refresh the apt cache before installing
+update_cache_before_install: true

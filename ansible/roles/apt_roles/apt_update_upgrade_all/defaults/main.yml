@@ -1,0 +1,10 @@
+---
+# defaults file for update_upgrade_packages
+ 
+# apt-specific
+apt_cache_valid_time: 3600
+apt_upgrade_type: dist   # options: yes, safe, full, dist
+apt_autoremove: true
+ 
+# Common
+reboot_if_required: false

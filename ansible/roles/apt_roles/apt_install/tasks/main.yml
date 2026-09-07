@@ -1,0 +1,13 @@
+---
+# tasks file for install_packages
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ apt_cache_valid_time }}"
+  when: update_cache_before_install
+
+- name: Install package(s)
+  ansible.builtin.apt:
+    name: "{{ packages }}"
+    state: "{{ package_state }}"

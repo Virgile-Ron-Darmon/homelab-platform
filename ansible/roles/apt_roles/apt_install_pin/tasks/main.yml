@@ -1,0 +1,52 @@
+---
+# tasks file for pin_and_hold_packages
+
+- name: Ensure packages list is not empty
+  ansible.builtin.assert:
+    that:
+      - packages | length > 0
+    fail_msg: "The 'packages' variable is empty. Set at least one package to pin and hold."
+
+- name: Query available versions for each package via apt-cache madison
+  ansible.builtin.shell:
+    cmd: "apt-cache madison {{ item }} | awk '{print $3}' | sort -V | tail -n1"
+  register: madison_results
+  changed_when: false
+  loop: "{{ packages }}"
+
+- name: Fail if any package has no available version
+  ansible.builtin.fail:
+    msg: "Could not find any version for {{ item.item }} — check your apt sources"
+  when: item.stdout | trim == ""
+  loop: "{{ madison_results.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Build a map of package -> latest available version
+  ansible.builtin.set_fact:
+    package_latest_versions: "{{ package_latest_versions | default({}) | combine({item.item: item.stdout | trim}) }}"
+  loop: "{{ madison_results.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Compute the lowest common version across all packages
+  ansible.builtin.set_fact:
+    pinned_version: "{{ package_latest_versions.values() | list | sort | first }}"
+
+- name: Show the versions found and the version being pinned
+  ansible.builtin.debug:
+    msg:
+      - "Latest available versions: {{ package_latest_versions }}"
+      - "Pinning all {{ packages | length }} package(s) to: {{ pinned_version }}"
+
+- name: Install package(s) pinned to the computed version
+  ansible.builtin.apt:
+    name: "{{ packages | map('regex_replace', '$', '=' + pinned_version) | list }}"
+    state: present
+    update_cache: "{{ update_cache_before_install }}"
+
+- name: Hold package(s) at the installed version
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ packages }}"

@@ -1,0 +1,19 @@
+---
+# defaults file for install_packages
+ 
+# List of packages to install. Can be a single package or many.
+# Example:
+#   packages:
+#     - nginx
+#     - git
+#     - htop
+packages: []
+ 
+# State passed to the apt module: present, latest, absent, etc.
+package_state: present
+ 
+# Whether to refresh the apt cache before installing
+update_cache_before_install: true
+ 
+# How long (seconds) the apt cache is considered valid before refreshing
+apt_cache_valid_time: 3600
