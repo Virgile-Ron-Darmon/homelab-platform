@@ -24,7 +24,7 @@ variable "template_node" {
 }
 
 variable "node_ip" {
-  type = number
+  type = string
   description = "ip of the template node"
 }
 

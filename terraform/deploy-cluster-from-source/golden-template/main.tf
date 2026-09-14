@@ -1,7 +1,6 @@
 resource "proxmox_virtual_environment_vm" "golden_template" {
   name      = var.template_name
   node_name = var.template_node
-  node_ip   = var.node_ip
   vm_id     = var.template_vm_id
 
   clone {
@@ -55,7 +54,7 @@ resource "null_resource" "api_convert_to_template" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      ${path.module}/api_convert_to_template \
+      ${path.module}/api_convert_to_template.sh \
       ${var.pm_api_token_id} \
       ${var.pm_api_token_secret} \
       ${var.template_node} \
