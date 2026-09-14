@@ -1,8 +1,9 @@
 resource "proxmox_virtual_environment_vm" "golden_template" {
   name      = var.template_name
   node_name = var.template_node
+  node_ip   = var.node_ip
   vm_id     = var.template_vm_id
-
+  
   clone {
     vm_id = var.source_vm_id
     full  = true
@@ -11,9 +12,6 @@ resource "proxmox_virtual_environment_vm" "golden_template" {
   agent {
     enabled = true
   }
-
-  # Convert this VM into a template once created
-  #template = true
 
   lifecycle {
     ignore_changes = [
@@ -24,17 +22,19 @@ resource "proxmox_virtual_environment_vm" "golden_template" {
   }
 }
 
+
 resource "local_file" "ansible_inventory" {
   filename = "${path.module}/inventory_source.ini"
 
   content = templatefile("${path.module}/inventory_source.tpl", {
     template_name  = template_name
-    source_ip    = proxmox_virtual_environment_vm.golden_template.ipv4_addresses
+    source_ip    = proxmox_virtual_environment_vm.golden_template.ipv4_addresses[1][0]
     ssh_user     = var.vm_ssh_user
     ssh_password = var.vm_ssh_password
   })
   depends_on = [proxmox_virtual_environment_vm.golden_template]
 }
+
 
 resource "null_resource" "run_ansible_playbook" {
   triggers = {
@@ -48,5 +48,14 @@ resource "null_resource" "run_ansible_playbook" {
     }
   }
   depends_on = [local_file.ansible_inventory]
+}
+
+
+resource "null_resource" "api_convert_to_template" {
+
+  provisioner "local-exec" {
+    command = "${path.module}/api_convert_to_template ${var.pm_api_token_id} ${var.pm_api_token_secret} "
+  }
+  depends_on = [null_resource.run_ansible_playbook]
 }
 

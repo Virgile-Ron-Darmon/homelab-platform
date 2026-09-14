@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PM_API_TOKEN_ID="$1"
+shift
+PM_API_TOKEN_SECRET="$1"
+shift
 NODE="$1" # node name
 shift
 PVE_HOST="$1" #node ip
 shift
 VMID="$1" #vm id
+
 
 AUTH="Authorization: PVEAPIToken=${PM_API_TOKEN_ID}=${PM_API_TOKEN_SECRET}"
 
