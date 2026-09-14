@@ -14,12 +14,12 @@ variable "source_vm_id" {
 }
 
 variable "template_name" {
-  type = number
+  type = string
   description = "ID of the template vm"
 }
 
 variable "template_node" {
-  type = number
+  type = string
   description = "ID of the template vm"
 }
 
