@@ -1,7 +1,26 @@
+resource "proxmox_virtual_environment_vm" "rbe_worker" {
+  count     = length(local.rbe_workers)
+  node_name = local.rbe_workers[count.index].node
+  vm_id     = var.clone_vmid_start + count.index
+  name      = "rbe-worker-${count.index + 1}"
+  stop_on_destroy = true
 
 
+  clone {
+    # Destination is node_name above; this is where the *source* template
+    # lives. Omitting it defaults to the destination node, which is why this
+    # only ever worked on a single node before.
+    node_name = var.target_node
+    vm_id     = proxmox_virtual_environment_vm.template_source.vm_id
+    full      = false # linked clone
+  }
 
+  agent {
+    enabled = true
+  }
 
+  depends_on = [proxmox_virtual_environment_vm.template_source]
+}
 
 
 resource "local_file" "ansible_inventory" {
@@ -13,12 +32,10 @@ resource "local_file" "ansible_inventory" {
         name      = vm.name
         mgmt_ip   = vm.ipv4_addresses[1][0]
         vmid      = vm.vm_id
-        static_ip = "10.50.0.${vm.vm_id - var.template_vmid}" # linear scheme, scales from 1 to 254 max, make 10.50.x.x for further scaling
+        static_ip = "10.50.0.${vm.vm_id - var.template_vm_id}" # linear scheme, scales from 1 to 254 max, make 10.50.x.x for further scaling
       }
     ]
     ssh_user     = var.vm_ssh_user
     ssh_password = var.vm_ssh_password
   })
-
-  depends_on = [proxmox_virtual_environment_vm.template_source]
 }
