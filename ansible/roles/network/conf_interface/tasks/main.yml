@@ -1,0 +1,14 @@
+- name: Drop static config for {{ target_interface }}
+  template:
+    src: config.j2
+    dest: /etc/network/interfaces.d/{{ target_interface }}
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Bring {{ target_interface }} down first (in case it's already up from a baked-in dhcp stanza)
+  command: ifdown {{ target_interface }}
+  failed_when: false
+
+- name: Bring {{ target_interface }} up with new static config
+  command: ifup ens19

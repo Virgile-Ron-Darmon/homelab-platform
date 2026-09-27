@@ -1,3 +1,9 @@
+local{
+  
+}
+
+
+
 resource "proxmox_virtual_environment_vm" "rbe_worker" {
   count     = length(local.rbe_workers)
   node_name = local.rbe_workers[count.index].node
@@ -18,8 +24,21 @@ resource "proxmox_virtual_environment_vm" "rbe_worker" {
   agent {
     enabled = true
   }
+    network_device {
+    bridge = var.mgmt_bridge
+    model  = var.mgmt_network_model
+    mac_address = local.mgt_macs[count.index]
+    vlan_id = 0
+  }
 
-  depends_on = [proxmox_virtual_environment_vm.template_source]
+  network_device {
+    bridge      = var.cluster_bridge
+    model       = var.cluster_network_model
+    mac_address = local.worker_macs[count.index]
+    vlan_id     = var.cluster_vlan_id
+  }
+  
+  depends_on = []
 }
 
 
