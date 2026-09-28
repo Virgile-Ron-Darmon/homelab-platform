@@ -1,18 +1,3 @@
-variable "pm_api_token_id" {
-  type      = string
-  sensitive = true
-}
-
-variable "pm_api_token_secret" {
-  type      = string
-  sensitive = true
-}
-
-variable "node_ip" {
-  type        = string
-  description = "IP of the Proxmox node the API is reached on"
-}
-
 variable "vms" {
   description = "VMs to create. List position sets the VMID and new IP."
   type = list(object({
