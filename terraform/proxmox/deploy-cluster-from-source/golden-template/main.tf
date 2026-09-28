@@ -1,3 +1,9 @@
+terraform {
+  required_providers {
+    proxmox = { source = "bpg/proxmox" }
+  }
+}
+
 resource "proxmox_virtual_environment_vm" "golden_template" {
   name      = var.template_name
   node_name = var.template_node
