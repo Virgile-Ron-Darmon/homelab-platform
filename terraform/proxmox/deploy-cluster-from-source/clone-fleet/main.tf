@@ -46,7 +46,7 @@ resource "proxmox_virtual_environment_vm" "fleet" {
 }
 
 resource "local_sensitive_file" "inventory_current" {
-  filename = "${var.inventory_dir}/inventory_current.ini"
+  filename = "${var.inventory_dir}/${name_prefix}_inventory_DHCP.ini"
   content = templatefile("${path.module}/inventory.tpl", {
     hosts        = [for i, vm in proxmox_virtual_environment_vm.fleet : { name = vm.name, ip = local.current_ips[i], new_ip = local.new_ips[i] }]
     interface    = var.interface
@@ -64,7 +64,7 @@ resource "local_sensitive_file" "inventory_current" {
 }
 
 resource "local_sensitive_file" "inventory_new" {
-  filename = "${var.inventory_dir}/inventory_new.ini"
+  filename = "${var.inventory_dir}/${name_prefix}_inventory_static.ini"
   content = templatefile("${path.module}/inventory.tpl", {
     hosts        = [for i, vm in proxmox_virtual_environment_vm.fleet : { name = vm.name, ip = local.new_ips[i], new_ip = local.new_ips[i] }]
     interface    = var.interface
