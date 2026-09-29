@@ -34,3 +34,9 @@
 - name: Verify
   assert:
     that: ansible_facts[target_interface].ipv4.address == target_static_ip
+
+- name: Write resolv.conf
+  template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    mode: '0644'

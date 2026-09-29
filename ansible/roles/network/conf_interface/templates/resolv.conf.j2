@@ -1,0 +1,4 @@
+{% set dns = target_dns if target_dns is defined else target_gateway %}
+{% for ns in (dns if dns is not string else dns.split()) %}
+nameserver {{ ns }}
+{% endfor %}
