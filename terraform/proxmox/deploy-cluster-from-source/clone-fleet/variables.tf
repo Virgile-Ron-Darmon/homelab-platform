@@ -65,3 +65,11 @@ variable "vm_ssh_password" {
 variable "network_netmask" {
   type = string
 }
+
+variable "gateway" {
+  type = string
+}
+
+variable "dns_nameservers" {
+  type = list(string)
+}

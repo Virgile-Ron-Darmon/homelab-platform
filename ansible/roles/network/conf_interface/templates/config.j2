@@ -2,3 +2,9 @@ auto {{ target_interface }}
 iface {{ target_interface }} inet static
     address {{ target_static_ip }}
     netmask {{ target_netmask }}
+    gateway {{ target_gateway }}
+{% if target_dns is defined %}
+    dns-nameservers {{ target_dns | join(' ') }}
+{% else %}
+    dns-nameservers {{ target_gateway }}
+{% endif %}
