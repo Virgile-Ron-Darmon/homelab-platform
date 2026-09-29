@@ -13,8 +13,10 @@
 - name: Restart interface, detached so losing SSH doesn't stop it
   command: >
     systemd-run --on-active=2 sh -c
-    'ifdown {{ target_interface }}; pkill -f "dhclient.*{{ target_interface }}";
-     ip addr flush dev {{ target_interface }}; ifup {{ target_interface }}'
+    'ifdown --force {{ target_interface }};
+     pkill -f "[d]hclient.*{{ target_interface }}";
+     ip addr flush dev {{ target_interface }};
+     ifup --force {{ target_interface }}'
 
 - name: Reconnect on the new IP
   set_fact:
