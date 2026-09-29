@@ -31,7 +31,7 @@
 
 - name: Compute the lowest common version across all packages
   ansible.builtin.set_fact:
-    pinned_version: "{{ package_latest_versions.values() | list | sort | first }}"
+    pinned_version: "{{ package_latest_versions.values() | community.general.version_sort | first }}"
 
 - name: Show the versions found and the version being pinned
   ansible.builtin.debug:
@@ -44,6 +44,7 @@
     name: "{{ packages | map('regex_replace', '$', '=' + pinned_version) | list }}"
     state: present
     update_cache: "{{ update_cache_before_install }}"
+    allow_change_held_packages: true
 
 - name: Hold package(s) at the installed version
   ansible.builtin.dpkg_selections:
