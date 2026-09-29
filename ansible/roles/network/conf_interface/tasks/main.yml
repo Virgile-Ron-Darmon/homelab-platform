@@ -1,7 +1,7 @@
 - name: Comment out baked-in DHCP stanza
   replace:
     path: /etc/network/interfaces
-    regexp: '^(\s*(auto|allow-hotplug|iface)\s+{{ target_interface }}\s.*)$'
+    regexp: '^([ \t]*(auto|allow-hotplug|iface)[ \t]+{{ target_interface }}(?=[ \t]|$).*)$'
     replace: '# \1'
 
 - name: Drop static config for {{ target_interface }}
