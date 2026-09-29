@@ -9,5 +9,5 @@ ansible_password=${ssh_password}
 ansible_become_password=${ssh_password}
 target_interface=${interface}
 target_netmask=${netmask}
-target_gateway=gateway
-target_dns=dns
+target_gateway=${gateway}
+target_dns=${dns}
