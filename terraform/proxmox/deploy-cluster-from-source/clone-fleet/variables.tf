@@ -60,3 +60,8 @@ variable "vm_ssh_password" {
   description = "SSH password for the VMs"
   sensitive   = true
 }
+
+
+variable "network_netmask" {
+  type = string
+}

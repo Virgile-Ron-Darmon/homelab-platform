@@ -50,7 +50,7 @@ resource "local_sensitive_file" "inventory_current" {
   content = templatefile("${path.module}/inventory.tpl", {
     hosts        = [for i, vm in proxmox_virtual_environment_vm.fleet : { name = vm.name, ip = local.current_ips[i], new_ip = local.new_ips[i] }]
     interface    = var.interface
-    netmask      = var.ip_netmask
+    netmask      = var.network_netmask
     ssh_user     = var.vm_ssh_user
     ssh_password = var.vm_ssh_password
   })
@@ -68,7 +68,7 @@ resource "local_sensitive_file" "inventory_new" {
   content = templatefile("${path.module}/inventory.tpl", {
     hosts        = [for i, vm in proxmox_virtual_environment_vm.fleet : { name = vm.name, ip = local.new_ips[i], new_ip = local.new_ips[i] }]
     interface    = var.interface
-    netmask      = var.ip_netmask
+    netmask      = var.network_netmask
     ssh_user     = var.vm_ssh_user
     ssh_password = var.vm_ssh_password
   })
