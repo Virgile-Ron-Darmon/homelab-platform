@@ -10,4 +10,6 @@ ansible_become_password=${ssh_password}
 target_interface=${interface}
 target_netmask=${netmask}
 target_gateway=${gateway}
-target_dns=${dns}
+%{ if length(dns) > 0 ~}
+target_dns=${join(" ", dns)}
+%{ endif ~}
