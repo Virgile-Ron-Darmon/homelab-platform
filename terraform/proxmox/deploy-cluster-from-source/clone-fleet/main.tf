@@ -53,8 +53,8 @@ resource "local_sensitive_file" "inventory_current" {
     netmask      = var.network_netmask
     ssh_user     = var.vm_ssh_user
     ssh_password = var.vm_ssh_password
-    target_gateway = var.gateway
-    target_dns = var.dns_nameservers
+    gateway = var.gateway
+    dns = var.dns_nameservers
   })
 
   lifecycle {
