@@ -10,10 +10,21 @@
     dest: /etc/network/interfaces.d/{{ target_interface }}
     mode: '0644'
 
+- name: Stop dhcpcd touching {{ target_interface }} or resolv.conf
+  lineinfile:
+    path: /etc/dhcpcd.conf
+    line: "{{ item }}"
+    create: true
+    mode: '0644'
+  loop:
+    - "denyinterfaces {{ target_interface }}"
+    - "nohook resolv.conf"
+
 - name: Restart interface, detached so losing SSH doesn't stop it
   command: >
     systemd-run --on-active=2 sh -c
     'ifdown --force {{ target_interface }};
+     dhcpcd -x {{ target_interface }} 2>/dev/null;
      pkill -f "[d]hclient.*{{ target_interface }}";
      ip addr flush dev {{ target_interface }};
      ifup --force {{ target_interface }}'
