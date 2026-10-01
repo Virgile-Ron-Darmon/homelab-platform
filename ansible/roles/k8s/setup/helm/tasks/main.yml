@@ -1,0 +1,38 @@
+---
+- name: Stop if Helm {{ helm_minor }} does not support Kubernetes {{ k8s_minor }}
+  ansible.builtin.assert:
+    that:
+      - k8s_minor is version(helm_built_for_k8s, '<=')
+      - k8s_minor is version(helm_built_for_k8s.split('.')[0] ~ '.' ~ (helm_built_for_k8s.split('.')[1] | int - 3), '>=')
+    fail_msg: >-
+      Helm {{ helm_minor }} supports Kubernetes {{ helm_built_for_k8s }} and the
+      three minors before it; k8s_minor is {{ k8s_minor }}. Update helm_minor
+      and helm_built_for_k8s together.
+    quiet: true
+
+- name: Add the Helm repo signing key
+  ansible.builtin.get_url:
+    url: https://packages.buildkite.com/helm-linux/helm-debian/gpgkey
+    dest: /etc/apt/keyrings/helm.asc
+    mode: "0644"
+
+- name: Add the Helm apt repo
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/helm.list
+    mode: "0644"
+    content: "deb [signed-by=/etc/apt/keyrings/helm.asc] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main\n"
+
+# The repo holds every Helm release; this keeps apt on helm_minor.
+- name: Limit apt to Helm {{ helm_minor }}
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/helm
+    mode: "0644"
+    content: |
+      Package: helm
+      Pin: version {{ helm_minor }}.*
+      Pin-Priority: 1001
+
+- name: Install Helm
+  ansible.builtin.apt:
+    name: helm
+    update_cache: true
