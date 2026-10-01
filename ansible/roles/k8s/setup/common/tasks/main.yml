@@ -1,0 +1,189 @@
+---
+# Prepares every cluster node, control plane and workers alike:
+# unique hostname and machine-id, OS updates, containerd, kernel settings,
+# and kubelet/kubeadm/kubectl pinned from pkgs.k8s.io.
+#
+# Required variables: k8s_minor, k8s_pause_image, k8s_cri_socket,
+#                     platform_roles (path to homelab-platform/ansible/roles)
+# Required collection: community.general
+
+# -- Hostname and machine-id --
+
+- name: Set the hostname to the inventory name
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Point 127.0.1.1 at the new hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ inventory_hostname }}"
+
+- name: Regenerate machine-id on hosts that share one
+  when: >-
+    ansible_play_hosts_all
+    | map('extract', hostvars, 'ansible_machine_id')
+    | select('equalto', ansible_machine_id)
+    | list | length > 1
+  block:
+    - name: Remove the cloned machine-id
+      ansible.builtin.file:
+        path: /etc/machine-id
+        state: absent
+
+    - name: Generate a new machine-id
+      ansible.builtin.command: systemd-machine-id-setup
+      changed_when: true
+
+    - name: Reboot so every service picks up the new machine-id
+      ansible.builtin.reboot:
+
+# -- OS packages --
+
+- name: Update and upgrade all packages
+  ansible.builtin.include_role:
+    name: "{{ platform_roles }}/apt/apt_update_upgrade_all"
+  vars:
+    reboot_if_required: true
+
+- name: Install containerd and the tools needed to add the Kubernetes repo
+  ansible.builtin.include_role:
+    name: "{{ platform_roles }}/apt/apt_install"
+  vars:
+    packages:
+      - containerd
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gpg
+
+# -- Swap --
+
+- name: Turn swap off now
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb | int > 0
+  changed_when: true
+
+- name: Keep swap off after reboots
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#\s]\S*\s+\S+\s+swap\s.*)$'
+    replace: '# \1'
+
+# -- Kernel modules and sysctls --
+
+- name: Load overlay and br_netfilter now
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: [overlay, br_netfilter]
+
+- name: Load overlay and br_netfilter at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    mode: "0644"
+    content: |
+      overlay
+      br_netfilter
+
+- name: Set Kubernetes sysctls
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    mode: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+  notify: Apply sysctls
+
+# -- containerd --
+
+- name: Create /etc/containerd
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: "0755"
+
+- name: Read containerd's default config
+  ansible.builtin.command: containerd config default
+  register: containerd_default
+  changed_when: false
+
+- name: Write containerd config
+  ansible.builtin.copy:
+    dest: /etc/containerd/config.toml
+    mode: "0644"
+    content: "{{ containerd_config }}\n"
+  vars:
+    containerd_config: >-
+      {{ containerd_default.stdout
+         | regex_replace('SystemdCgroup = false', 'SystemdCgroup = true')
+         | regex_replace('sandbox_image = ".*"', 'sandbox_image = "' ~ k8s_pause_image ~ '"')
+         | regex_replace("sandbox = '.*'", "sandbox = '" ~ k8s_pause_image ~ "'")
+         | regex_replace('/usr/lib/cni', '/opt/cni/bin') }}
+  notify: Restart containerd
+
+- name: Check the config really uses systemd cgroups
+  ansible.builtin.command: grep -q 'SystemdCgroup = true' /etc/containerd/config.toml
+  changed_when: false
+
+- name: Check the config looks for CNI plugins where Calico puts them
+  ansible.builtin.command: grep -q '/opt/cni/bin' /etc/containerd/config.toml
+  changed_when: false
+
+- name: Enable and start containerd
+  ansible.builtin.systemd_service:
+    name: containerd
+    enabled: true
+    state: started
+
+# -- Kubernetes packages --
+
+- name: Create /etc/apt/keyrings
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download the repo signing key for Kubernetes {{ k8s_minor }}
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+    force: true
+  register: k8s_repo_key
+
+- name: Add the apt repo for Kubernetes {{ k8s_minor }}
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/kubernetes.list
+    mode: "0644"
+    content: >
+      deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc]
+      https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor }}/deb/ /
+  register: k8s_repo_list
+
+- name: Refresh the apt cache for the new repo
+  ansible.builtin.apt:
+    update_cache: true
+  when: k8s_repo_key is changed or k8s_repo_list is changed
+
+- name: See which packages are installed
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Install kubelet, kubeadm and kubectl at one version and hold them
+  ansible.builtin.include_role:
+    name: "{{ platform_roles }}/apt/apt_install_pin"
+  vars:
+    packages:
+      - kubelet
+      - kubeadm
+      - kubectl
+    update_cache_before_install: false
+  when: "'kubeadm' not in ansible_facts.packages"
+
+- name: Enable kubelet
+  ansible.builtin.systemd_service:
+    name: kubelet
+    enabled: true
+    

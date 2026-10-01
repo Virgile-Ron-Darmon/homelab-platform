@@ -1,0 +1,41 @@
+---
+# Joins worker nodes to an existing cluster and labels them.
+# Safe to rerun: nodes already in the cluster are skipped.
+#
+# The calling playbook must run a preceding play on the control plane
+# that sets hostvars[k8s_first_cp].k8s_worker_join_command.
+#
+# Required variables: k8s_first_cp, k8s_cri_socket, k8s_admin_kubeconfig
+
+- name: Check whether this node is already in the cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: k8s_kubelet_conf
+
+- name: Join as a worker on {{ inventory_hostname }}
+  ansible.builtin.command: >-
+    {{ hostvars[k8s_first_cp].k8s_worker_join_command }}
+    --cri-socket {{ k8s_cri_socket }}
+  when: not k8s_kubelet_conf.stat.exists
+  changed_when: true
+  no_log: true
+
+- name: Wait until Ready on {{ inventory_hostname }}
+  ansible.builtin.command: >-
+    kubectl wait --for=condition=Ready node/{{ inventory_hostname }}
+    --timeout=300s
+  delegate_to: "{{ k8s_first_cp }}"
+  environment:
+    KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
+  changed_when: false
+
+- name: Add the worker role label on {{ inventory_hostname }}
+  ansible.builtin.command: >-
+    kubectl label node {{ inventory_hostname }}
+    node-role.kubernetes.io/worker= --overwrite
+  delegate_to: "{{ k8s_first_cp }}"
+  environment:
+    KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
+  register: k8s_label
+  changed_when: "'not labeled' not in k8s_label.stdout"
+  

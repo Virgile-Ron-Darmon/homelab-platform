@@ -17,3 +17,4 @@
   environment:
     KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
   changed_when: false
+  

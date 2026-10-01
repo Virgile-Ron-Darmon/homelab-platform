@@ -1,0 +1,107 @@
+---
+# Builds the control plane: kubeadm init on the first node, then any
+# other control plane nodes joined one at a time. Safe to rerun: nodes
+# that already belong to the cluster are skipped.
+#
+# The calling playbook MUST set serial: 1 and order: sorted so the first
+# node finishes init before the others try to join.
+#
+# Required variables: k8s_first_cp, k8s_control_plane_endpoint,
+#   k8s_pod_network_cidr, k8s_cri_socket, k8s_admin_kubeconfig
+
+- name: Check whether this node is already in the cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: k8s_kubelet_conf
+
+# -- First control plane node --
+
+- name: Initialise the cluster on {{ k8s_first_cp }}
+  when: inventory_hostname == k8s_first_cp
+  environment:
+    KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
+  block:
+    - name: Read the installed kubeadm version
+      ansible.builtin.command: kubeadm version -o short
+      register: k8s_kubeadm_version
+      changed_when: false
+
+    - name: Run kubeadm init
+      ansible.builtin.command: >-
+        kubeadm init
+        --kubernetes-version {{ k8s_kubeadm_version.stdout }}
+        --control-plane-endpoint {{ k8s_control_plane_endpoint }}
+        --apiserver-advertise-address {{ ansible_host }}
+        --pod-network-cidr {{ k8s_pod_network_cidr }}
+        --cri-socket {{ k8s_cri_socket }}
+        --upload-certs
+      when: not k8s_kubelet_conf.stat.exists
+      changed_when: true
+
+    - name: Wait until Ready on {{ inventory_hostname }}
+      ansible.builtin.command: >-
+        kubectl wait --for=condition=Ready node/{{ inventory_hostname }}
+        --timeout=300s
+      changed_when: false
+
+    # Only needed when there are more control plane nodes to join.
+    - name: Upload the control plane certificates for the other nodes
+      ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
+      register: k8s_upload_certs
+      changed_when: true
+      no_log: true
+      when: ansible_play_hosts_all | length > 1
+
+    - name: Create a join command
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: k8s_join_command
+      changed_when: true
+      no_log: true
+      when: ansible_play_hosts_all | length > 1
+
+    - name: Keep the join details for the other control plane nodes
+      ansible.builtin.set_fact:
+        k8s_cp_join_command: "{{ k8s_join_command.stdout }}"
+        k8s_certificate_key: "{{ k8s_upload_certs.stdout_lines | last }}"
+      no_log: true
+      when: ansible_play_hosts_all | length > 1
+
+# -- Other control plane nodes --
+
+- name: Join as a control plane node on {{ inventory_hostname }}
+  ansible.builtin.command: >-
+    {{ hostvars[k8s_first_cp].k8s_cp_join_command }}
+    --control-plane
+    --certificate-key {{ hostvars[k8s_first_cp].k8s_certificate_key }}
+    --apiserver-advertise-address {{ ansible_host }}
+    --cri-socket {{ k8s_cri_socket }}
+  when:
+    - inventory_hostname != k8s_first_cp
+    - not k8s_kubelet_conf.stat.exists
+  changed_when: true
+  no_log: true
+
+# -- kubectl for the SSH user --
+
+- name: Look up the SSH user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ ansible_user }}"
+
+- name: Create ~/.kube for {{ ansible_user }}
+  ansible.builtin.file:
+    path: "{{ ansible_facts.getent_passwd[ansible_user][4] }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+
+- name: Copy the admin kubeconfig for {{ ansible_user }}
+  ansible.builtin.copy:
+    src: "{{ k8s_admin_kubeconfig }}"
+    remote_src: true
+    dest: "{{ ansible_facts.getent_passwd[ansible_user][4] }}/.kube/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+    
