@@ -38,4 +38,3 @@
     KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
   register: k8s_label
   changed_when: "'not labeled' not in k8s_label.stdout"
-  

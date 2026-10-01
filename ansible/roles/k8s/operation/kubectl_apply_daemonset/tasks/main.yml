@@ -1,6 +1,4 @@
 ---
-# roles/kubectl_apply_daemonset/tasks/main.yml
-
 - name: Apply {{ component_label }} manifest
   ansible.builtin.command: >-
     kubectl apply --server-side --force-conflicts
@@ -17,4 +15,3 @@
   environment:
     KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
   changed_when: false
-  

@@ -186,4 +186,3 @@
   ansible.builtin.systemd_service:
     name: kubelet
     enabled: true
-    

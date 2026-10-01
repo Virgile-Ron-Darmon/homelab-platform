@@ -38,6 +38,14 @@
       when: not k8s_kubelet_conf.stat.exists
       changed_when: true
 
+    - name: Install the CNI plugin
+      ansible.builtin.include_role:
+        name: "{{ platform_roles }}/k8s/operation/kubectl_apply_daemonset"
+      vars:
+        component_label: "{{ k8s_cni_plugin }} {{ k8s_cni_version }}"
+        manifest_url: "{{ k8s_cni_manifest_url }}"
+        daemonset_name: "{{ k8s_cni_daemonset_name }}"
+
     - name: Wait until Ready on {{ inventory_hostname }}
       ansible.builtin.command: >-
         kubectl wait --for=condition=Ready node/{{ inventory_hostname }}
@@ -104,4 +112,3 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0600"
-    
