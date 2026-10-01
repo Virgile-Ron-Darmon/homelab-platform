@@ -1,0 +1,19 @@
+---
+# roles/kubectl_apply_daemonset/tasks/main.yml
+
+- name: Apply {{ component_label }} manifest
+  ansible.builtin.command: >-
+    kubectl apply --server-side --force-conflicts
+    -f {{ manifest_url }}
+  environment:
+    KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
+  changed_when: false
+
+- name: Wait for {{ component_label }} DaemonSet to be ready
+  ansible.builtin.command: >-
+    kubectl -n {{ daemonset_namespace | default('kube-system') }}
+    rollout status daemonset/{{ daemonset_name }}
+    --timeout=300s
+  environment:
+    KUBECONFIG: "{{ k8s_admin_kubeconfig }}"
+  changed_when: false
