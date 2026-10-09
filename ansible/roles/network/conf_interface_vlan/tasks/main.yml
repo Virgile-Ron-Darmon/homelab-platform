@@ -1,0 +1,74 @@
+---
+# Adds a tagged VLAN subinterface (e.g. ens18.6) with a static address.
+#
+# The parent interface, its address and the default route are not touched,
+# so the SSH session stays up and traffic outside the VLAN's subnet keeps
+# leaving through the parent. No gateway is set on the VLAN interface.
+#
+# Required variables: vlan_id, and target_static_ip unless vlan_ip is set
+# Required collection: community.general
+
+- name: Check the VLAN settings
+  ansible.builtin.assert:
+    that:
+      - vlan_id is defined
+      - (vlan_id | int) >= 1
+      - (vlan_id | int) <= 4094
+      - vlan_ip is match('^\d+\.\d+\.\d+\.\d+$')
+      - vlan_netmask is match('^\d+\.\d+\.\d+\.\d+$')
+    fail_msg: >-
+      {{ inventory_hostname }} needs vlan_id (1 to 4094), and either
+      target_static_ip or vlan_ip, plus a dotted vlan_netmask.
+    quiet: true
+
+- name: Load the 802.1Q module now
+  community.general.modprobe:
+    name: 8021q
+    state: present
+
+- name: Load the 802.1Q module at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/8021q.conf
+    mode: "0644"
+    content: |
+      8021q
+
+# Without this, dhcpcd would try to get a DHCP lease on the new interface.
+- name: Stop dhcpcd touching the subinterface
+  ansible.builtin.lineinfile:
+    path: /etc/dhcpcd.conf
+    line: "denyinterfaces {{ vlan_interface }}"
+    create: true
+    mode: "0644"
+
+- name: Write the static config for {{ vlan_interface }}
+  ansible.builtin.template:
+    src: vlan.j2
+    dest: /etc/network/interfaces.d/{{ vlan_interface }}
+    mode: "0644"
+  register: vlan_config
+
+- name: Recreate the subinterface with the new settings, {{ vlan_interface }}
+  ansible.builtin.shell: |
+    ifdown --force {{ vlan_interface }} 2>/dev/null || true
+    ip link delete {{ vlan_interface }} 2>/dev/null || true
+    ifup {{ vlan_interface }}
+  when: vlan_config is changed
+  changed_when: true
+
+- name: Make sure the subinterface is up, {{ vlan_interface }}
+  ansible.builtin.command: ifup {{ vlan_interface }}
+  when: vlan_config is not changed
+  changed_when: false
+
+- name: Read the interface addresses
+  ansible.builtin.setup:
+    gather_subset: [network]
+
+- name: Verify the subinterface address is {{ vlan_ip }}
+  ansible.builtin.assert:
+    that:
+      - (vlan_interface | replace('.', '_')) in ansible_facts
+      - ansible_facts[vlan_interface | replace('.', '_')].ipv4.address == vlan_ip
+    fail_msg: "{{ vlan_interface }} did not come up with {{ vlan_ip }}."
+    quiet: true

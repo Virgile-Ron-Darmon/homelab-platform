@@ -1,0 +1,53 @@
+---
+# Creates a self-signed CA on the machine running Ansible, or keeps the one
+# already in pki_dir. Run it in a play against localhost.
+#
+# Produces {{ pki_dir }}/ca.key (private, 0600) and {{ pki_dir }}/ca.crt.
+#
+# Required variables: pki_dir
+# Required collection: community.crypto (needs the cryptography Python
+# library on the controller, which ansible-core already depends on)
+
+- name: Check pki_dir is set
+  ansible.builtin.assert:
+    that: pki_dir is defined and pki_dir | length > 0
+    fail_msg: Set pki_dir to the folder that holds the CA.
+    quiet: true
+
+- name: Create {{ pki_dir }}
+  ansible.builtin.file:
+    path: "{{ pki_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Create the CA private key
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_dir }}/ca.key"
+    type: ECC
+    curve: secp384r1
+    mode: "0600"
+
+- name: Build the CA signing request
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ pki_dir }}/ca.key"
+    common_name: "{{ ca_common_name }}"
+    use_common_name_for_san: false
+    basic_constraints:
+      - CA:TRUE
+    basic_constraints_critical: true
+    key_usage:
+      - keyCertSign
+      - cRLSign
+    key_usage_critical: true
+  register: ca_csr
+  changed_when: false
+
+# Kept as is on later runs unless it no longer matches the key or settings.
+- name: Self-sign the CA certificate
+  community.crypto.x509_certificate:
+    path: "{{ pki_dir }}/ca.crt"
+    csr_content: "{{ ca_csr.csr }}"
+    privatekey_path: "{{ pki_dir }}/ca.key"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ ca_valid_days }}d"
+    mode: "0644"

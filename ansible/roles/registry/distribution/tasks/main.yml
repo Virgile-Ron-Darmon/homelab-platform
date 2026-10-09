@@ -1,0 +1,123 @@
+---
+# Runs the CNCF distribution registry from Debian's docker-registry package:
+# TLS from certificates the caller provides, basic auth for one user, images
+# stored on local disk. apt keeps it updated; the role only configures it.
+#
+# The package's config file is a conffile. apt keeps the version written
+# here on upgrades (Ansible's apt module runs dpkg with --force-confold).
+#
+# Required variables: registry_listen_address, registry_tls_cert_src,
+#   registry_tls_key_src, registry_ca_cert_src, registry_username,
+#   registry_password, platform_roles
+
+- name: Check the registry settings
+  ansible.builtin.assert:
+    that:
+      - registry_listen_address is defined
+      - registry_tls_cert_src is defined
+      - registry_tls_key_src is defined
+      - registry_ca_cert_src is defined
+      - registry_username is defined and registry_username | length > 0
+      - registry_password is defined and registry_password | length > 0
+    fail_msg: >-
+      Set registry_listen_address, registry_tls_cert_src, registry_tls_key_src,
+      registry_ca_cert_src, registry_username and registry_password.
+    quiet: true
+
+- name: Install the registry and htpasswd
+  ansible.builtin.include_role:
+    name: "{{ platform_roles }}/apt/apt_install"
+  vars:
+    packages:
+      - "{{ registry_package }}"
+      - apache2-utils
+
+# -- TLS --
+
+- name: Copy the TLS certificate and the CA
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ registry_config_dir }}/{{ item.dest }}"
+    owner: root
+    group: "{{ registry_user }}"
+    mode: "0644"
+  loop:
+    - { src: "{{ registry_tls_cert_src }}", dest: tls.crt }
+    - { src: "{{ registry_ca_cert_src }}", dest: ca.crt }
+  notify: Restart registry
+
+- name: Copy the TLS key
+  ansible.builtin.copy:
+    src: "{{ registry_tls_key_src }}"
+    dest: "{{ registry_config_dir }}/tls.key"
+    owner: root
+    group: "{{ registry_user }}"
+    mode: "0640"
+  notify: Restart registry
+
+# -- Auth --
+# The password goes through stdin so it never shows in the process list.
+
+- name: Check the stored password
+  ansible.builtin.command:
+    cmd: htpasswd -iv {{ registry_config_dir }}/htpasswd {{ registry_username }}
+    stdin: "{{ registry_password }}"
+  register: registry_htpasswd_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Write the user and password hash
+  ansible.builtin.command:
+    cmd: htpasswd -iBc -C 12 {{ registry_config_dir }}/htpasswd {{ registry_username }}
+    stdin: "{{ registry_password }}"
+  when: registry_htpasswd_check.rc != 0
+  changed_when: true
+  no_log: true
+  notify: Restart registry
+
+- name: Restrict the password file
+  ansible.builtin.file:
+    path: "{{ registry_config_dir }}/htpasswd"
+    owner: root
+    group: "{{ registry_user }}"
+    mode: "0640"
+
+# -- Service --
+
+- name: Write the registry config
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: "{{ registry_config_dir }}/config.yml"
+    owner: root
+    group: "{{ registry_user }}"
+    mode: "0640"
+  notify: Restart registry
+
+- name: Enable and start the registry
+  ansible.builtin.systemd_service:
+    name: "{{ registry_service }}"
+    enabled: true
+    state: started
+
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers
+
+# -- Check --
+
+- name: Wait for the registry to listen
+  ansible.builtin.wait_for:
+    host: "{{ registry_listen_address }}"
+    port: "{{ registry_port }}"
+    timeout: 60
+
+# Checks the certificate chain and names against the CA, and the login.
+- name: Log in to the registry API over TLS
+  ansible.builtin.uri:
+    url: "https://{{ registry_listen_address }}:{{ registry_port }}/v2/"
+    ca_path: "{{ registry_config_dir }}/ca.crt"
+    url_username: "{{ registry_username }}"
+    url_password: "{{ registry_password }}"
+    force_basic_auth: true
+    status_code: 200
+  no_log: true

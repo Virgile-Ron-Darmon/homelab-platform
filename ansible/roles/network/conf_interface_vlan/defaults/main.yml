@@ -1,0 +1,14 @@
+---
+# Interface that carries the VLAN as a tagged trunk.
+vlan_parent: "{{ target_interface | default('ens18') }}"
+
+# vlan_id has no default: the caller must set it (1 to 4094).
+
+# Name of the subinterface, e.g. ens18.6
+vlan_interface: "{{ vlan_parent }}.{{ vlan_id }}"
+
+# Address on the VLAN. By default it is the management address with the
+# second octet set to the VLAN ID, so 10.0.50.1 on VLAN 6 becomes 10.6.50.1.
+vlan_ip: "{{ ([target_static_ip.split('.')[0], vlan_id | string] + target_static_ip.split('.')[2:]) | join('.') }}"
+
+vlan_netmask: 255.255.0.0

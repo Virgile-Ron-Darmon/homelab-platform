@@ -1,0 +1,66 @@
+---
+# Issues a TLS server certificate for the current host, signed by the CA in
+# pki_dir. Everything happens on the controller; the role using the
+# certificate copies it to the host.
+#
+# Produces {{ cert_dir }}/tls.key and {{ cert_dir }}/tls.crt. A certificate
+# that already matches the key and the requested names is kept.
+#
+# Required variables: pki_dir, and at least one of cert_ip_sans / cert_dns_sans
+# Required collection: community.crypto
+
+- name: Check the certificate settings
+  ansible.builtin.assert:
+    that:
+      - pki_dir is defined
+      - (cert_ip_sans | length + cert_dns_sans | length) > 0
+    fail_msg: Set pki_dir, and list at least one IP or DNS name to issue for.
+    quiet: true
+
+- name: Create {{ cert_dir }}
+  ansible.builtin.file:
+    path: "{{ cert_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Create the private key
+  community.crypto.openssl_privatekey:
+    path: "{{ cert_dir }}/tls.key"
+    type: ECC
+    curve: secp256r1
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+
+- name: Build the signing request
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ cert_dir }}/tls.key"
+    common_name: "{{ cert_common_name }}"
+    subject_alt_name: >-
+      {{ (cert_ip_sans | map('regex_replace', '^', 'IP:') | list)
+       + (cert_dns_sans | map('regex_replace', '^', 'DNS:') | list) }}
+    use_common_name_for_san: false
+    basic_constraints:
+      - CA:FALSE
+    key_usage:
+      - digitalSignature
+    extended_key_usage:
+      - serverAuth
+  register: cert_csr
+  changed_when: false
+  delegate_to: localhost
+  become: false
+
+- name: Sign the certificate with the CA
+  community.crypto.x509_certificate:
+    path: "{{ cert_dir }}/tls.crt"
+    csr_content: "{{ cert_csr.csr }}"
+    provider: ownca
+    ownca_path: "{{ pki_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ pki_dir }}/ca.key"
+    ownca_not_after: "+{{ cert_valid_days }}d"
+    mode: "0644"
+  delegate_to: localhost
+  become: false

@@ -34,7 +34,13 @@ Components:
 | [apt_update_upgrade_all](ansible/roles/apt/apt_update_upgrade_all/README.md) | Ansible role | Upgrade everything, optionally reboot |
 | [apt_install_pin](ansible/roles/apt/apt_install_pin/README.md) | Ansible role | Install packages at one shared version and hold them |
 | [conf_interface](ansible/roles/network/conf_interface/README.md) | Ansible role | Move a host from DHCP to a static IP |
-| [k8s/setup/common](ansible/roles/k8s/setup/common/README.md) | Ansible role | Prepare any Kubernetes node |
+| conf_interface_vlan | Ansible role | Add a tagged VLAN subinterface with a static address |
+| system/identity | Ansible role | Set the hostname and regenerate a cloned machine-id once |
+| pki/local_ca | Ansible role | Create or reuse a self-signed CA on the controller |
+| pki/issue_cert | Ansible role | Issue a TLS server certificate from that CA |
+| storage/nfs_server | Ansible role | Share a folder over NFS with a list of clients |
+| registry/distribution | Ansible role | Configure Debian's docker-registry package with TLS and basic auth |
+| [k8s/setup/common](ansible/roles/k8s/setup/common/README.md) | Ansible role | Prepare any Kubernetes node, optionally trusting an extra CA |
 | [k8s/setup/master](ansible/roles/k8s/setup/master/README.md) | Ansible role | Build the control plane |
 | [k8s/setup/worker](ansible/roles/k8s/setup/worker/README.md) | Ansible role | Join a worker |
 | [k8s/setup/helm](ansible/roles/k8s/setup/helm/README.md) | Ansible role | Install Helm pinned to one minor version |
@@ -53,7 +59,7 @@ A typical deployment chains the components like this:
 ## Requirements
 
 - Terraform with the [bpg/proxmox](https://registry.terraform.io/providers/bpg/proxmox/latest) provider, configured by the caller
-- Ansible, plus the `community.general` collection for some roles
+- Ansible, plus the `community.general` collection for some roles and `community.crypto` for the `pki` roles
 - Target VMs running Debian with `ifupdown` networking and apt
 
 Each component README lists its own requirements.
@@ -111,7 +117,11 @@ terraform/proxmox/deploy-cluster-from-source/
   golden-template-WIP/      Experimental template flow
 ansible/roles/
   apt/                      Package install, upgrade, pinning
-  network/                  DHCP to static IP
+  network/                  DHCP to static IP, VLAN subinterfaces
+  system/                   Hostname and machine-id
+  pki/                      Self-signed CA and certificates
+  storage/                  NFS server
+  registry/                 Container image registry
   k8s/setup/                Node, control plane, worker, Helm
   k8s/operation/            Day 2 operations
   .base/                    Skeleton for new roles

@@ -1,0 +1,32 @@
+# Managed by Ansible (homelab-platform registry/distribution)
+version: 0.1
+
+log:
+  level: info
+
+storage:
+  filesystem:
+    rootdirectory: {{ registry_data_dir }}
+  # Lets old images be deleted through the API, then reclaimed with
+  # "docker-registry garbage-collect".
+  delete:
+    enabled: true
+
+http:
+  addr: {{ registry_listen_address }}:{{ registry_port }}
+  tls:
+    certificate: {{ registry_config_dir }}/tls.crt
+    key: {{ registry_config_dir }}/tls.key
+  headers:
+    X-Content-Type-Options: [nosniff]
+
+auth:
+  htpasswd:
+    realm: {{ registry_realm }}
+    path: {{ registry_config_dir }}/htpasswd
+
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3

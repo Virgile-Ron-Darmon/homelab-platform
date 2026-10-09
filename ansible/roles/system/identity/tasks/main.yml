@@ -1,0 +1,73 @@
+---
+# Gives a cloned VM its own identity: hostname from the inventory, and a
+# fresh machine-id where it still has the template's.
+#
+# The machine-id is regenerated (then the host reboots) when:
+#   - other hosts in the play share it, or
+#   - the host is alone in its play, so it cannot be compared, and this
+#     role has never run on it.
+# A marker file records that the host has been handled, so later runs skip
+# it. A host whose machine-id is already unique in its play only gets the
+# marker: no new machine-id, no reboot.
+#
+# No required variables.
+
+- name: Set the hostname to the inventory name
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Point 127.0.1.1 at the new hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ inventory_hostname }}"
+
+- name: Read the machine-id
+  ansible.builtin.setup:
+    gather_subset: [min]
+  when: ansible_machine_id is not defined
+
+- name: Check whether this host was already handled
+  ansible.builtin.stat:
+    path: /var/lib/homelab/machine-id-regenerated
+  register: identity_marker
+
+- name: Handle the machine-id
+  when: not identity_marker.stat.exists
+  block:
+    - name: Regenerate a shared or unchecked machine-id
+      when: >-
+        ansible_play_hosts_all | length == 1
+        or ansible_play_hosts_all
+           | map('extract', hostvars, 'ansible_machine_id')
+           | select('equalto', ansible_machine_id)
+           | list | length > 1
+      block:
+        - name: Remove the cloned machine-id
+          ansible.builtin.file:
+            path: /etc/machine-id
+            state: absent
+
+        - name: Generate a new machine-id
+          ansible.builtin.command: systemd-machine-id-setup
+          changed_when: true
+
+        - name: Mark the reboot as needed
+          ansible.builtin.set_fact:
+            identity_reboot: true
+
+    - name: Create /var/lib/homelab
+      ansible.builtin.file:
+        path: /var/lib/homelab
+        state: directory
+        mode: "0755"
+
+    - name: Leave the marker
+      ansible.builtin.copy:
+        dest: /var/lib/homelab/machine-id-regenerated
+        mode: "0644"
+        content: ""
+
+    - name: Reboot so every service picks up the new machine-id
+      ansible.builtin.reboot:
+      when: identity_reboot | default(false)

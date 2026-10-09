@@ -1,42 +1,22 @@
 ---
 # Prepares every cluster node, control plane and workers alike:
 # unique hostname and machine-id, OS updates, containerd, kernel settings,
-# and kubelet/kubeadm/kubectl pinned from pkgs.k8s.io.
+# the NFS client, an optional extra trusted CA, and kubelet/kubeadm/kubectl
+# pinned from pkgs.k8s.io.
 #
 # Required variables: k8s_minor, k8s_pause_image, k8s_cri_socket,
 #                     platform_roles (path to homelab-platform/ansible/roles)
+# Optional variables:
+#   k8s_trusted_ca_cert  CA certificate on the controller to add to the
+#                        node's trust store, e.g. for a private registry
+#   k8s_trusted_ca_name  file name it gets there (default homelab-ca)
 # Required collection: community.general
 
 # -- Hostname and machine-id --
 
-- name: Set the hostname to the inventory name
-  ansible.builtin.hostname:
-    name: "{{ inventory_hostname }}"
-
-- name: Point 127.0.1.1 at the new hostname
-  ansible.builtin.lineinfile:
-    path: /etc/hosts
-    regexp: '^127\.0\.1\.1\s'
-    line: "127.0.1.1 {{ inventory_hostname }}"
-
-- name: Regenerate machine-id on hosts that share one
-  when: >-
-    ansible_play_hosts_all
-    | map('extract', hostvars, 'ansible_machine_id')
-    | select('equalto', ansible_machine_id)
-    | list | length > 1
-  block:
-    - name: Remove the cloned machine-id
-      ansible.builtin.file:
-        path: /etc/machine-id
-        state: absent
-
-    - name: Generate a new machine-id
-      ansible.builtin.command: systemd-machine-id-setup
-      changed_when: true
-
-    - name: Reboot so every service picks up the new machine-id
-      ansible.builtin.reboot:
+- name: Set the hostname and a unique machine-id
+  ansible.builtin.include_role:
+    name: "{{ platform_roles }}/system/identity"
 
 # -- OS packages --
 
@@ -46,16 +26,31 @@
   vars:
     reboot_if_required: true
 
-- name: Install containerd and the tools needed to add the Kubernetes repo
+- name: Install containerd, the NFS client and the tools needed to add the Kubernetes repo
   ansible.builtin.include_role:
     name: "{{ platform_roles }}/apt/apt_install"
   vars:
     packages:
       - containerd
+      - nfs-common
       - apt-transport-https
       - ca-certificates
       - curl
       - gpg
+
+# -- Extra trusted CA --
+# containerd reads the system trust store when it starts, so it is
+# restarted to pick the CA up for image pulls.
+
+- name: Trust the extra CA
+  ansible.builtin.copy:
+    src: "{{ k8s_trusted_ca_cert }}"
+    dest: "/usr/local/share/ca-certificates/{{ k8s_trusted_ca_name | default('homelab-ca') }}.crt"
+    mode: "0644"
+  when: k8s_trusted_ca_cert is defined and k8s_trusted_ca_cert | length > 0
+  notify:
+    - Update CA certificates
+    - Restart containerd
 
 # -- Swap --
 

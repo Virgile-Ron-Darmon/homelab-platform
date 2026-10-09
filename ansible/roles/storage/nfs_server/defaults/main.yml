@@ -1,0 +1,13 @@
+---
+# Folder shared over NFS.
+nfs_export_path: /srv/nfs/k8s
+
+# nfs_clients has no default: the caller lists the addresses allowed to
+# mount the export, one per client.
+
+# no_root_squash lets a Kubernetes NFS provisioner create and chown a
+# folder per volume. Only the listed clients get it.
+nfs_export_options: rw,sync,no_subtree_check,no_root_squash
+
+# File under /etc/exports.d (the .exports suffix is added).
+nfs_exports_name: homelab

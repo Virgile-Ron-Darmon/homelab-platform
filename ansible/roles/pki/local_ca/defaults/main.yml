@@ -1,0 +1,7 @@
+---
+# pki_dir has no default: the caller must set it. It is a folder on the
+# machine running Ansible that holds ca.key and ca.crt. Keep it out of Git
+# and back it up: a rebuild reuses the CA found there.
+
+ca_common_name: Homelab CA
+ca_valid_days: 3650

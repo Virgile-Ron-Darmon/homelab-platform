@@ -1,0 +1,22 @@
+---
+# The registry comes from Debian's docker-registry package (the CNCF
+# distribution registry). apt keeps it updated like any other package, and
+# the package provides the binary, the service, the user and the folders.
+# These match the package.
+registry_package: docker-registry
+registry_service: docker-registry
+registry_user: docker-registry
+registry_config_dir: /etc/docker/registry
+registry_data_dir: /var/lib/docker-registry
+
+# registry_listen_address has no default: the caller sets the address the
+# registry binds to (only that one, so it is not reachable on other VLANs).
+registry_port: 5000
+
+# Paths on the controller. No defaults: the caller sets
+#   registry_tls_cert_src, registry_tls_key_src, registry_ca_cert_src
+# The CA certificate is only used here to check the registry over TLS.
+
+# registry_username and registry_password have no defaults. The password
+# is stored as a bcrypt hash; changing it replaces the single user.
+registry_realm: Homelab Registry

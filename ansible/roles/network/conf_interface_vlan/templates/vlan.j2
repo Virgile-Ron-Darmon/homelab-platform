@@ -1,0 +1,6 @@
+# Managed by Ansible (homelab-platform network/conf_interface_vlan)
+auto {{ vlan_interface }}
+iface {{ vlan_interface }} inet static
+    address {{ vlan_ip }}
+    netmask {{ vlan_netmask }}
+    vlan-raw-device {{ vlan_parent }}

@@ -1,0 +1,16 @@
+---
+# pki_dir has no default: the caller must set it to the folder the
+# pki/local_ca role created.
+
+# Subject of the certificate.
+cert_common_name: "{{ inventory_hostname }}"
+
+# Subject alternative names. Clients check the address they connect to
+# against these, so list every IP and name the service is reached by.
+cert_ip_sans: []
+cert_dns_sans: []
+
+cert_valid_days: 825
+
+# Where the key and certificate land on the controller.
+cert_dir: "{{ pki_dir }}/{{ inventory_hostname }}"

@@ -1,0 +1,3 @@
+# Managed by Ansible (homelab-platform storage/nfs_server)
+{{ nfs_export_path }} {% for client in nfs_clients %}{{ client }}({{ nfs_export_options }}){% if not loop.last %} {% endif %}{% endfor %}
+
